@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Seats</title>
+<style>
+:root{
+  --bg:#f5f4ef; --card:#ffffff; --ink:#1c2230; --muted:#667085; --line:#e4e2da;
+  --free:#1f8f5f; --free-bg:#e5f5ed; --booked:#b86e00; --booked-bg:#fcefd6;
+  --occ:#c53a3a; --occ-bg:#fbe5e5; --accent:#2747c9; --accent-ink:#ffffff; --sel:#2747c9;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#12151b; --card:#1b1f27; --ink:#e9ebf0; --muted:#98a1b0; --line:#2b313c;
+    --free:#47c78d; --free-bg:#16352a; --booked:#f0b04a; --booked-bg:#3a2c12;
+    --occ:#ef7373; --occ-bg:#3d1d1d; --accent:#7f97ff; --accent-ink:#0d1226; --sel:#7f97ff; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:20px 16px 8px;max-width:1100px;margin:0 auto}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}
+#clock{color:var(--muted);font-variant-numeric:tabular-nums}
+main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;max-width:1100px;margin:0 auto;padding:8px 16px 40px}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{font-size:15px;margin:0 0 12px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:13px;margin-bottom:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+#grid{display:grid;gap:10px}
+.seat{border:2px solid transparent;border-radius:12px;padding:10px 10px 9px;text-align:left;cursor:pointer;font:inherit;color:inherit;min-height:84px;display:flex;flex-direction:column;gap:2px}
+.seat b{font-size:16px}
+.seat small{color:var(--muted);font-size:12px}
+.seat .st{font-size:12.5px;font-weight:600;margin-top:auto}
+.seat.free{background:var(--free-bg)} .seat.free .st{color:var(--free)}
+.seat.booked{background:var(--booked-bg)} .seat.booked .st{color:var(--booked)}
+.seat.occupied{background:var(--occ-bg)} .seat.occupied .st{color:var(--occ)}
+.seat.na{opacity:.5;cursor:not-allowed}
+.seat.selected{border-color:var(--sel);box-shadow:0 0 0 3px color-mix(in srgb,var(--sel) 25%,transparent)}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 4px}
+input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.field{margin-top:0}
+.btns{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+button.act{padding:11px 14px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer}
+button.act.alt{background:transparent;color:var(--accent)}
+button.act:disabled{opacity:.45;cursor:not-allowed}
+.note{margin-top:10px;font-size:13px;color:var(--muted);min-height:18px}
+.note.err{color:var(--occ)}
+.list{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.list li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:14px}
+.list li .t{font-variant-numeric:tabular-nums;color:var(--muted)}
+.list button{border:0;background:transparent;color:var(--occ);cursor:pointer;font:inherit}
+.empty{color:var(--muted);font-size:14px}
+#cam{width:100%;border-radius:10px;display:block;background:#222;aspect-ratio:4/3}
+.tiny{font-size:12px;color:var(--muted);margin-top:8px}
+.switch{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);margin-top:12px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Library seat booking</h1>
+  <div id="clock">&nbsp;</div>
+</header>
+
+<main>
+  <div class="stack">
+    <section class="card">
+      <h2>Seat map</h2>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--free)"></i>Free</span>
+        <span><i class="dot" style="background:var(--booked)"></i>Booked right now</span>
+        <span><i class="dot" style="background:var(--occ)"></i>Occupied (camera)</span>
+        <span>Faded = not available for your chosen time</span>
+      </div>
+      <div id="grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>Live camera view</h2>
+      <img id="cam" alt="Live camera view with seat boxes">
+      <div class="tiny" id="camInfo">Green box = empty seat, red box = person detected.</div>
+      <div class="btns" style="margin-top:10px">
+        <button class="act" id="camBtn" hidden>Start camera</button>
+        <button class="act alt" id="calBtn">Recalibrate camera (seats must be empty)</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Book a seat</h2>
+      <div class="field">
+        <label for="name">Your name</label>
+        <input id="name" type="text" maxlength="30" placeholder="e.g. Aman Singh" autocomplete="name">
+      </div>
+      <div class="row">
+        <div class="field"><label for="start">From</label><select id="start"></select></div>
+        <div class="field"><label for="end">To</label><select id="end"></select></div>
+      </div>
+      <div class="note" id="slotNote"></div>
+      <div class="note" id="selNote">Tap a seat on the map, or let the system pick one for you.</div>
+      <div class="btns">
+        <button class="act" id="bookBtn" disabled>Book selected seat</button>
+        <button class="act alt" id="autoBtn">Auto-assign first free seat</button>
+      </div>
+      <div class="switch" id="demoRow" hidden>
+        <input type="checkbox" id="demo"><label for="demo" style="margin:0">Demo: tapping a seat puts a person on it / removes them</label>
+      </div>
+      <div class="note" id="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>My bookings</h2>
+      <ul class="list" id="mine"></ul>
+    </section>
+
+    <section class="card">
+      <h2>All bookings today</h2>
+      <ul class="list" id="all"></ul>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = m => String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let data = null, selected = null, built = false;
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  return r.json();
+}
+function post(path, obj){
+  return api(path, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams(obj)});
+}
+function toast(text){
+  const t = $('#toast'); t.textContent = text; t.classList.add('show');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2800);
+}
+function setMsg(text, isErr){ const m = $('#msg'); m.textContent = text; m.className = 'note' + (isErr ? ' err' : ''); }
+
+function buildSelects(){
+  const s = $('#start'), e = $('#end');
+  for(let m = data.open; m < data.close; m += 30) s.add(new Option(fmt(m), m));
+  for(let m = data.open + 30; m <= data.close; m += 30) e.add(new Option(fmt(m), m));
+  let st = data.now - data.now % 30;
+  st = Math.max(data.open, Math.min(st, data.close - 30));
+  s.value = st;
+  e.value = Math.min(st + 60, data.close);
+  s.onchange = () => {
+    if (+e.value <= +s.value) e.value = Math.min(+s.value + 60, data.close);
+    refresh();
+  };
+  e.onchange = refresh;
+  built = true;
+}
+
+async function refresh(){
+  const q = built ? `?start=${$('#start').value}&end=${$('#end').value}` : '';
+  try {
+    data = await api('/api/seats' + q);
+  } catch(err){ setMsg('Cannot reach the server', true); return; }
+  if(!built) { buildSelects(); return refresh(); }
+  render();
+}
+
+function render(){
+  $('#clock').textContent = 'Now ' + fmt(data.now) + '  ·  open ' + fmt(data.open) + '–' + fmt(data.close);
+  $('#demoRow').hidden = !data.simulated;
+  $('#camBtn').hidden = data.camera !== 'browser' || !!camStream;
+  const sn = $('#slotNote'); sn.textContent = data.slotError; sn.className = 'note' + (data.slotError ? ' err' : '');
+
+  const grid = $('#grid');
+  grid.style.gridTemplateColumns = `repeat(${data.cols}, minmax(0,1fr))`;
+  grid.innerHTML = '';
+  data.seats.forEach(s => {
+    const state = s.bookedNow ? 'booked' : (s.inUse ? 'occupied' : 'free');
+    const label = s.bookedNow ? (s.inUse ? 'Booked · in use' : 'Booked now') : (s.inUse ? 'Occupied' : 'Free');
+    const b = document.createElement('button');
+    b.className = 'seat ' + state + (s.available ? '' : ' na') + (selected === s.id ? ' selected' : '');
+    b.innerHTML = `<b>${esc(s.id)}</b><small>${esc(s.type)}</small><span class="st">${esc(label)}</span>` +
+                  (s.available ? '' : `<small>${esc(s.reason)}</small>`);
+    b.onclick = () => onSeat(s);
+    grid.appendChild(b);
+  });
+  const cur = data.seats.find(s => s.id === selected);
+  if (selected !== null && (!cur || !cur.available)) selected = null;
+
+  $('#bookBtn').disabled = selected === null;
+  $('#selNote').textContent = selected === null ? 'Tap a seat on the map, or let the system pick one for you.'
+    : `Selected: Seat ${selected}, ${fmt(+$('#start').value)}–${fmt(+$('#end').value)}`;
+
+  const me = $('#name').value.trim().toLowerCase();
+  const li = b => `<li><span><b>Seat ${esc(b.seat)}</b> · ${esc(b.user)}</span><span class="t">${fmt(b.start)}–${fmt(b.end)}</span></li>`;
+  $('#all').innerHTML = data.bookings.length ? data.bookings.map(li).join('') : '<li class="empty">No bookings yet</li>';
+  const mine = data.bookings.filter(b => me && b.user.toLowerCase() === me);
+  $('#mine').innerHTML = mine.length
+    ? mine.map(b => `<li><span><b>Seat ${esc(b.seat)}</b> <span class="t">${fmt(b.start)}–${fmt(b.end)}</span></span><button data-id="${b.id}">Cancel</button></li>`).join('')
+    : `<li class="empty">${me ? 'You have no bookings today' : 'Enter your name to see your bookings'}</li>`;
+  $('#mine').querySelectorAll('button').forEach(btn => btn.onclick = () => cancel(btn.dataset.id));
+}
+
+async function onSeat(s){
+  if (data.simulated && $('#demo').checked) {
+    await post('/api/simulate', {seat: s.id, present: s.inUse ? 0 : 1});
+    toast(`Seat ${s.id}: person ${s.inUse ? 'left' : 'sat down'} (the camera will notice in about a second)`);
+    return;
+  }
+  if (!s.available) { toast(s.reason || 'Seat not available for that time'); return; }
+  selected = (selected === s.id) ? null : s.id;
+  render();
+}
+
+async function book(seat){
+  const name = $('#name').value.trim();
+  if (!name) { setMsg('Please enter your name first', true); $('#name').focus(); return; }
+  localStorage.setItem('libName', name);
+  const r = await post('/api/book', {name, seat, start: $('#start').value, end: $('#end').value});
+  if (r.ok) { setMsg(r.message, false); toast(r.message); selected = null; }
+  else setMsg(r.error, true);
+  refresh();
+}
+async function cancel(id){
+  const r = await post('/api/cancel', {id, name: $('#name').value.trim()});
+  if (r.ok) toast('Booking cancelled'); else setMsg(r.error, true);
+  refresh();
+}
+
+$('#calBtn').onclick = async () => {
+  if (!confirm('Recalibrate only when the seats are EMPTY: the camera will treat what it sees as "nobody here".\n\nAfter you press OK you get 5 seconds to step out of the camera view.')) return;
+  for (let n = 5; n > 0; n--) { toast('Recalibrating in ' + n + ' … keep the seats empty'); await new Promise(r => setTimeout(r, 1000)); }
+  const r = await post('/api/calibrate', {});
+  toast(r.ok ? r.message : r.error);
+};
+
+// ---- Browser camera: open the laptop camera and send grayscale pictures to the C++ server ----
+let camStream = null;
+async function startBrowserCam(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Open the page as http://localhost:8080 on the same computer (cameras need localhost or HTTPS)');
+    return;
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video: {width: {ideal: 640}, height: {ideal: 480}}, audio: false});
+  } catch (e) {
+    toast('Camera blocked. Allow camera access for this page and try again.');
+    return;
+  }
+  const video = document.createElement('video');
+  video.srcObject = camStream; video.muted = true; video.playsInline = true;
+  await video.play();
+  const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+  const gray = new Uint8Array(640 * 480);
+  $('#camBtn').hidden = true;
+  toast('Camera started. Aim it at the empty seats, then press Recalibrate.');
+  while (camStream) {
+    try {
+      ctx.drawImage(video, 0, 0, 640, 480);
+      const px = ctx.getImageData(0, 0, 640, 480).data;
+      for (let i = 0, j = 0; i < px.length; i += 4, j++) gray[j] = (px[i] * 77 + px[i+1] * 150 + px[i+2] * 29) >> 8;
+      await fetch('/api/upload', {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: gray});
+    } catch (e) { /* server busy or restarting: just try again */ }
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+$('#camBtn').onclick = startBrowserCam;
+$('#bookBtn').onclick = () => book(selected);
+$('#autoBtn').onclick = () => book(0);
+$('#name').oninput = () => { if (data) render(); };
+try { $('#name').value = localStorage.getItem('libName') || ''; } catch(e) {}
+
+// live camera image: request the next frame only after the previous one has loaded
+const cam = $('#cam');
+function nextFrame(){ cam.src = '/api/frame.bmp?t=' + Date.now(); }
+cam.onload = () => setTimeout(nextFrame, 700);
+cam.onerror = () => setTimeout(nextFrame, 2000);
+nextFrame();
+
+refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>
